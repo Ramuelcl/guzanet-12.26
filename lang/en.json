@@ -6,7 +6,7 @@
     "Public Home Page": "Public Home Page",
     "location": "Location",
     "Welcome to the Platform": "Welcome to the Platform",
-    "Welcome": "You are viewing the **Guzanet** interface in guest mode. The entire structure of the system window is identical to the private area.",
+    "You are viewing the **Guzanet** interface in guest mode. The entire structure of the system window is identical to the private area.": "You are viewing the **Guzanet** interface in guest mode. The entire structure of the system window is identical to the private area.",
     "accepted": "The :attribute must be accepted.",
     "active_url": "The :attribute is not a valid URL.",
     "after": "The :attribute must be a date after :date.",

@@ -5,7 +5,9 @@ import laravel from 'laravel-vite-plugin';
 export default defineConfig({
     plugins: [
         laravel({
-            input: ['resources/css/app.css', 'resources/js/app.js'],
+            input: ['resources/css/app.css', 'resources/js/app.js',
+                'resources/js/time.js', 'resources/js/modo-dark.js'
+            ],
             refresh: true, // Esto activa el HMR para Blade y Rutas
         }),
     ],

@@ -2,7 +2,7 @@
 <x-app-layout>
     {{-- Slot del Header (Opcional, se muestra debajo de la nav) --}}
     <x-slot name="header">
-        <h2 class="font-semibold text-xs text-gray-400 uppercase tracking-widest">
+        <h2 class="font-semibold text-xs text-gray-400 tracking-widest">
             {{ __('Public Home Page') }}
         </h2>
     </x-slot>
@@ -11,7 +11,7 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border border-gray-100">
                 <div class="p-12 text-center">
-                    <h3 class="text-2xl font-bold text-gray-800 mb-4 uppercase tracking-tighter">
+                    <h3 class="text-2xl font-bold text-gray-800 mb-4 tracking-tighter">
                         {{ __('Welcome to the Platform') }}
                     </h3>
                     <p class="text-gray-500 max-w-md mx-auto leading-relaxed">
