@@ -3,6 +3,7 @@
 @php
     $ownerName = config('system.owner.name');
     $ownerShort = config('system.owner.short');
+    $ownerLogo_path = config('system.owner.logo_path');
     $clientName = config('system.client.name');
     $clientShort = config('system.client.short');
     $centerTitle = config('system.display.center_title');
@@ -16,8 +17,8 @@
             <div class="flex items-center space-x-3">
                 <div class="flex items-center space-x-2">
                     {{-- Logo Guzanet --}}
-                    <div title="{{ $ownerName }}" class="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white font-bold text-xs shadow-sm">
-                        {{ $ownerShort }}
+                    <div title="{{ $ownerName }}" class="w-8 h-8 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                        {{ $ownerLogo_path }}
                     </div>
                     
                     <span class="text-gray-300 font-light">/</span>

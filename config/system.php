@@ -8,9 +8,9 @@ return [
     |--------------------------------------------------------------------------
     */
     'owner' => [
-        'name' => 'GUZANET',
+        'name' => 'Guzanet',
         'short' => 'G',
-        'logo_path' => null, // Futura ruta: 'img/guzanet-logo.png'
+        'logo_path' => 'app/images/logo/Guzanet.png', // Futura ruta: 'img/guzanet-logo.png'
     ],
 
     'client' => [

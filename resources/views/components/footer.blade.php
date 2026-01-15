@@ -33,7 +33,7 @@
 
       {{-- Bloque 2: Ruta del Sistema --}}
       <div class="flex-1 text-center truncate">
-        <span class="text-indigo-600">{{ __('Ubicación') }}:</span> {{ $location }}
+        <span class="text-indigo-600">{{ __('location') }}:</span> {{ $location }}
       </div>
 
       {!! $separator !!}
@@ -42,7 +42,7 @@
 
       {{-- Bloque 4: Idioma --}}
       <div class="flex-1 text-center">
-        {{ __('Idioma') }}: {{ strtoupper(app()->getLocale()) }}
+        {{ __('Lang') }}: {{ strtoupper(app()->getLocale()) }}
       </div>
 
       {!! $separator !!}
