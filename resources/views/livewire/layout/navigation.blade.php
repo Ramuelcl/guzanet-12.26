@@ -40,10 +40,11 @@
             <div class="flex justify-end items-center space-x-6">
                 {{-- Selector de Idioma --}}
                 <div class="flex items-center space-x-1 text-[10px] font-bold border-r pr-4 uppercase text-gray-500">
-                    <span>Lang:</span>
+                    <span>{{ __('Lang') }}:</span>
                     <select onchange="window.location.href='/lang/'+this.value" class="border-none bg-transparent p-0 focus:ring-0 cursor-pointer font-black text-gray-800">
                         <option value="es" {{ app()->getLocale() == 'es' ? 'selected' : '' }}>ES</option>
                         <option value="en" {{ app()->getLocale() == 'en' ? 'selected' : '' }}>EN</option>
+                        <option value="fr" {{ app()->getLocale() == 'fr' ? 'selected' : '' }}>FR</option>
                     </select>
                 </div>
 
@@ -52,11 +53,11 @@
                         <span class="text-indigo-600 tracking-tighter">{{ auth()->user()->name }}</span>
                         <form method="POST" action="{{ route('logout') }}" class="inline">
                             @csrf
-                            <button type="submit" class="text-red-500 hover:text-red-700 transition">Salir</button>
+                            <button type="submit" class="text-red-500 hover:text-red-700 transition">{{ __('Log Out') }}</button>
                         </form>
                     @else
-                        <a href="{{ route('login') }}" wire:navigate class="text-gray-500 hover:text-indigo-600">Login</a>
-                        <a href="{{ route('register') }}" wire:navigate class="bg-gray-800 text-white px-3 py-1.5 rounded-sm hover:bg-black transition shadow-sm">Register</a>
+                        <a href="{{ route('login') }}" wire:navigate class="text-gray-500 hover:text-indigo-600">{{ __('Login') }}</a>
+                        <a href="{{ route('register') }}" wire:navigate class="bg-gray-800 text-white px-3 py-1.5 rounded-sm hover:bg-black transition shadow-sm">{{ __('Register') }}</a>
                     @endauth
                 </div>
             </div>

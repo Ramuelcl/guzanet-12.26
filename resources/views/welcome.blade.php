@@ -3,7 +3,7 @@
     {{-- Slot del Header (Opcional, se muestra debajo de la nav) --}}
     <x-slot name="header">
         <h2 class="font-semibold text-xs text-gray-400 uppercase tracking-widest">
-            {{ __('Página de Inicio Pública') }}
+            {{ __('Public Home Page') }}
         </h2>
     </x-slot>
 
@@ -12,17 +12,16 @@
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg border border-gray-100">
                 <div class="p-12 text-center">
                     <h3 class="text-2xl font-bold text-gray-800 mb-4 uppercase tracking-tighter">
-                        Bienvenido a la Plataforma
+                        {{ __('Welcome to the Platform') }}
                     </h3>
                     <p class="text-gray-500 max-w-md mx-auto leading-relaxed">
-                        Estás visualizando la interfaz de **Guzanet** en modo invitado. 
-                        Toda la estructura de la ventana del sistema es idéntica a la zona privada.
+                        {{ __('You are viewing the **Guzanet** interface in guest mode. The entire structure of the system window is identical to the private area.') }}
                     </p>
                     
                     @guest
                         <div class="mt-8 flex justify-center space-x-4">
                             <a href="{{ route('login') }}" wire:navigate class="px-6 py-2 bg-indigo-600 text-white text-xs font-bold uppercase rounded shadow-md hover:bg-indigo-700 transition">
-                                {{ __('Iniciar Sesión') }}
+                                {{ __('Login') }}
                             </a>
                         </div>
                     @endguest

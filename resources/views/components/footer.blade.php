@@ -38,19 +38,6 @@
 
       {!! $separator !!}
 
-      {{-- Bloque 3: Identidad --}}
-      <div class="flex-1 text-center truncate font-bold">
-        @auth
-          {{-- Muestra el nombre y un icono si tiene una preferencia de idioma específica --}}
-          <span class="font-bold">
-            {{ Auth::user()->name }}
-            <small class="text-[7px]">({{ strtoupper(Auth::user()->getSetting('lang', 'es')) }})</small>
-          </span>
-        @else
-          <span class="text-gray-400 italic">Guest (Global CFG)</span>
-        @endauth
-      </div>
-
       {!! $separator !!}
 
       {{-- Bloque 4: Idioma --}}

@@ -17,6 +17,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('admin.settings');
 });
 
-Route::view('acerca-de', 'home.acerca-de')->name('acerca-de');
+
 
 require __DIR__ . '/auth.php';
+require __DIR__ . '/home.php';
