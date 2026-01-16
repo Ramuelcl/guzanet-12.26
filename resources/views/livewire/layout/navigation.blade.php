@@ -66,6 +66,25 @@
         </div>
       </div>
 
+      {{-- FILA INFERIOR: Menú Centrado --}}
+    <div class="flex justify-center items-center pb-3 space-x-8">
+      <x-nav-link-custom href="/about" :active="request()->is('about')">
+        {{ __('About') }}
+      </x-nav-link-custom>
+
+      <x-nav-link-custom href="/contact" :active="request()->is('contact')">
+        {{ __('Contact') }}
+      </x-nav-link-custom>
+
+      <x-nav-link-custom href="/banking" :active="request()->is('banking')">
+        {{ __('Banking') }}
+      </x-nav-link-custom>
+
+      <x-nav-link-custom href="/jobs" :active="request()->is('jobs')">
+        {{ __('Jobs') }}
+      </x-nav-link-custom>
+    </div>
+    
     </div>
   </div>
 </nav>

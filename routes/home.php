@@ -3,10 +3,16 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Session;
+use Livewire\Volt\Volt;
 
 // --- RUTAS PÚBLICAS (Sin login) ---
 // Cualquier persona puede ver esto
-Route::view('acerca-de', 'home.acerca-de')->name('acerca-de');
+Route::view('about', 'home.about')->name('about');
+
+// URL: /pages/contact
+// Componente: resources/views/livewire/pages/contact.blade.php
+Volt::route('contact', 'pages.contact')
+  ->name('contact');
 
 // Ruta para el cambio de idioma
 Route::get('lang/{locale}', function ($locale) {

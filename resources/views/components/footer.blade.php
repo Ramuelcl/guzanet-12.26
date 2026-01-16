@@ -7,19 +7,19 @@
 @endphp
 
 <footer class="bg-lightBg dark:bg-darkBg fixed bottom-0 left-0 w-full z-50 flex items-center h-[10mm] leading-none"
-  x-data="{ 
-        darkMode: localStorage.getItem('theme') === 'dark',
-        toggleTheme() {
-            this.darkMode = !this.darkMode;
-            if (this.darkMode) {
-                document.documentElement.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-                localStorage.setItem('theme', 'light');
-            }
-        }
-    }">
+  x-data="{
+      darkMode: localStorage.getItem('theme') === 'dark',
+      toggleTheme() {
+          this.darkMode = !this.darkMode;
+          if (this.darkMode) {
+              document.documentElement.classList.add('dark');
+              localStorage.setItem('theme', 'dark');
+          } else {
+              document.documentElement.classList.remove('dark');
+              localStorage.setItem('theme', 'light');
+          }
+      }
+  }">
   <div class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between items-center text-[9px] font-medium tracking-tighter text-gray-600">
 
@@ -57,12 +57,15 @@
 
           {{-- Toggle Dark Mode --}}
           {{-- Botón con AlpineJS --}}
-                    <button @click="toggleTheme()" class="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 shadow-sm transition-transform active:scale-90">
-                        {{-- Icono Sol (Se ve solo en modo oscuro) --}}
-                        <img x-show="darkMode" src="{{ asset('app/images/icons/outline/sun.svg') }}" class="w-4 h-4" alt="Sun" x-cloak>
-                        {{-- Icono Luna (Se ve solo en modo claro) --}}
-                        <img x-show="!darkMode" src="{{ asset('app/images/icons/outline/moon.svg') }}" class="w-3.5 h-3.5" alt="Moon" x-cloak>
-                    </button>
+          <button @click="toggleTheme()"
+            class="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 shadow-sm transition-transform active:scale-90">
+            {{-- Icono Sol (Se ve solo en modo oscuro) --}}
+            <img x-show="darkMode" src="{{ asset('app/images/icons/outline/sun.svg') }}" class="w-4 h-4" alt="Sun"
+              x-cloak>
+            {{-- Icono Luna (Se ve solo en modo claro) --}}
+            <img x-show="!darkMode" src="{{ asset('app/images/icons/outline/moon.svg') }}" class="w-3.5 h-3.5"
+              alt="Moon" x-cloak>
+          </button>
         </div>
       @endif
 
