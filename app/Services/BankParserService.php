@@ -5,140 +5,172 @@ namespace App\Services;
 
 class BankParserService {
   public function parseBancas(string $text) {
+    $text = str_replace("\t", " ", $text);
     $pdfConfig = config('banca.pdf');
-    $cuentasConf = $pdfConfig['cuentas'];
+    $lineas = explode("\n", $text);
 
     $pdfExtract = [
       'cliente' => $this->extraerDatosCliente($text, $pdfConfig)
     ];
 
-    // --- DETECCIÓN DINÁMICA DE CUENTAS ---
-    foreach ($cuentasConf as $key => $pattern) {
-      // Ignoramos llaves que no son identificadores de cuenta
-      if (in_array($key, ['iban', 'bic'])) continue;
+    $cuentaActual = null;
+    $capturarOps = false;
+    $tempOp = null; // Para acumular la operación actual
 
-      // Usamos PREG_OFFSET_CAPTURE para verificar si el patrón existe en el texto
-      if (preg_match($pattern, $text, $match)) {
+    foreach ($lineas as $index => $l) {
+      $l = trim($l);
+      if (empty($l) || $l === "pausa") continue;
 
-        // Mapeamos el nombre descriptivo según la clave de tu config
-        $tipoNombre = match ($key) {
-          'cuenta1' => 'COMPTE COURANT POSTAL',
-          'cuenta2' => 'LIVRET A',
-          'cuenta3' => 'LIVRET B',
-          default   => 'AUTRE COMPTE'
-        };
+      // 1. IDENTIFICACIÓN DE CUENTA (CABECERA O SALDO)
+      foreach ($pdfConfig['cuentas'] as $key => $pattern) {
+        if (in_array($key, ['iban', 'bic'])) continue;
 
-        // Agregamos la cuenta al array final
-        $pdfExtract[$key] = [
-          'detalle' => $this->mapearDetalleCuenta($tipoNombre, $match, $text, $cuentasConf),
-          'operaciones' => []
-        ];
+        if (preg_match($pattern, $l, $m)) {
+          // Si ya teníamos una operación pendiente de la cuenta anterior, la guardamos
+          if ($tempOp && $cuentaActual) {
+            $pdfExtract[$cuentaActual]['operaciones'][] = $tempOp;
+            $tempOp = null;
+          }
+
+          $cuentaActual = $key;
+          $capturarOps = false;
+
+          if (!isset($pdfExtract[$cuentaActual])) {
+            $pdfExtract[$cuentaActual] = [
+              'detalle' => [
+                'tipo' => strtoupper($key),
+                'numero' => str_replace(' ', '', $m[1]),
+                'saldo' => (float)str_replace([' ', ','], ['', '.'], $m[2]),
+                'signo' => (str_contains($m[2], '-')) ? '-' : '+',
+                'iban' => 'N/A',
+                'bic' => 'N/A'
+              ],
+              'operaciones' => []
+            ];
+          } else {
+            $pdfExtract[$cuentaActual]['detalle']['saldo'] = (float)str_replace([' ', ','], ['', '.'], $m[2]);
+          }
+          continue 2;
+        }
+      }
+
+      // 2. BÚSQUEDA DE NOMBRE LARGO PARA IBAN/BIC
+      if (preg_match('/(Compte Courant Postal|Livret A|Livret B)\s+n°\s*([\w\s]+)/i', $l, $mLargo)) {
+        $cuentaActual = $this->mapearNombreAClave($mLargo[1]);
+        if (!isset($pdfExtract[$cuentaActual])) {
+          $pdfExtract[$cuentaActual] = [
+            'detalle' => ['tipo' => $mLargo[1], 'numero' => str_replace(' ', '', $mLargo[2]), 'saldo' => 0, 'signo' => '+', 'iban' => 'N/A', 'bic' => 'N/A'],
+            'operaciones' => []
+          ];
+        }
+
+        for ($i = 1; $i <= 3; $i++) {
+          if (isset($lineas[$index + $i])) {
+            $subL = trim($lineas[$index + $i]);
+            if (preg_match($pdfConfig['cuentas']['iban'], $subL, $ibanM)) $pdfExtract[$cuentaActual]['detalle']['iban'] = str_replace(' ', '', $ibanM[1]);
+            if (preg_match($pdfConfig['cuentas']['bic'], $subL, $bicM)) $pdfExtract[$cuentaActual]['detalle']['bic'] = trim($bicM[1]);
+          }
+        }
+        continue;
+      }
+
+      // 3. PROCESAMIENTO DE OPERACIONES (MÁQUINA DE ESTADOS)
+      if ($cuentaActual && isset($pdfExtract[$cuentaActual])) {
+        $delims = $pdfConfig['delimitadores'];
+
+        // Control de entrada/salida de la zona de movimientos
+        if (str_contains($l, $delims['inicio'])) {
+          $capturarOps = true;
+          continue;
+        }
+        if (str_contains($l, $delims['fin']) || str_contains($l, "Nouveau solde au")) {
+          if ($tempOp) {
+            $pdfExtract[$cuentaActual]['operaciones'][] = $tempOp;
+            $tempOp = null;
+          }
+          $capturarOps = false;
+          continue;
+        }
+
+        if ($capturarOps) {
+          // Detectar nueva operación por fecha (dd/mm)
+          // Buscamos fecha al inicio y capturamos el resto de la línea
+          if (preg_match('/^(\d{2}\/\d{2})\s+(.+)$/', $l, $mOp)) {
+            // Si ya había una operación, la guardamos antes de empezar la nueva
+            if ($tempOp) {
+              $pdfExtract[$cuentaActual]['operaciones'][] = $tempOp;
+            }
+
+            $fecha = $mOp[1];
+            $restoLinea = $mOp[2];
+
+            // Intentamos extraer montos y saldo de esta misma línea
+            // Patrón: Monto (con coma) + Espacio + Signo (+/-) + Espacio + Saldo (con coma)
+            $monto = 0;
+            $signo = '+';
+            $saldo_linea = 0;
+            if (preg_match('/([\d\s]+,\d{2})\s+([+-])\s+([\d\s]+,\d{2})$/', $restoLinea, $mValores)) {
+              $monto = (float)str_replace([' ', ','], ['', '.'], $mValores[1]);
+              $signo = $mValores[2];
+              $saldo_linea = (float)str_replace([' ', ','], ['', '.'], $mValores[3]);
+              // Limpiamos la descripción quitando los montos
+              $descripcion = trim(str_replace($mValores[0], '', $restoLinea));
+            } else {
+              $descripcion = trim($restoLinea);
+            }
+
+            $tempOp = [
+              'fecha' => $fecha,
+              'descripcion' => $descripcion,
+              'monto' => $monto,
+              'signo' => $signo,
+              'saldo_mov' => $saldo_linea
+            ];
+          } elseif ($tempOp) {
+            // Si no hay fecha, es una línea de descripción excedente
+            // Pero cuidado: a veces el monto viene en la segunda línea
+            if (preg_match('/([\d\s]+,\d{2})\s+([+-])\s+([\d\s]+,\d{2})$/', $l, $mValores)) {
+              $tempOp['monto'] = (float)str_replace([' ', ','], ['', '.'], $mValores[1]);
+              $tempOp['signo'] = $mValores[2];
+              $tempOp['saldo_mov'] = (float)str_replace([' ', ','], ['', '.'], $mValores[3]);
+              $extraDesc = trim(str_replace($mValores[0], '', $l));
+              if (!empty($extraDesc)) $tempOp['descripcion'] .= " " . $extraDesc;
+            } else {
+              $tempOp['descripcion'] .= " " . $l;
+            }
+          }
+        }
       }
     }
 
-    // Si se detectaron cuentas, procesamos las operaciones
-    return $this->procesarBloquesOperaciones($text, $pdfExtract, $pdfConfig['delimitadores']);
+    return $pdfExtract;
   }
 
-  private function mapearDetalleCuenta($nombreLargo, $matches, $text, $conf) {
-    // Buscamos IBAN y BIC globales
-    preg_match($conf['iban'], $text, $ibanM);
-    preg_match($conf['bic'], $text, $bicM);
-
-    // Limpieza de saldos: eliminamos espacios y convertimos coma en punto
-    $rawSaldo = str_replace(' ', '', $matches[2]);
-    $valSaldo = (float)str_replace(',', '.', $rawSaldo);
-
-    return [
-      'tipo' => $nombreLargo,
-      'numero' => str_replace(' ', '', $matches[1]),
-      'saldo' => $valSaldo,
-      'signo' => ($valSaldo >= 0) ? '+' : '-',
-      'iban' => $ibanM[1] ?? 'N/A',
-      'bic' => $bicM[1] ?? 'N/A'
-    ];
+  private function mapearNombreAClave($nombre) {
+    return match (true) {
+      str_contains(strtoupper($nombre), 'COURANT') => 'cuenta1',
+      str_contains(strtoupper($nombre), 'LIVRET A') => 'cuenta2',
+      str_contains(strtoupper($nombre), 'LIVRET B') => 'cuenta3',
+      default => 'cuenta_extra'
+    };
   }
 
   private function extraerDatosCliente($text, $pdfConfig) {
-    $titConf = $pdfConfig['titular'];
     $lineas = explode("\n", $text);
     $cliente = ['id' => 'N/A', 'nombre' => 'N/A', 'direccion' => 'N/A', 'cp' => 'N/A', 'ciudad' => 'N/A', 'banco' => 'N/A'];
-
     if (preg_match($pdfConfig['banca_nombre'], $text, $bM)) $cliente['banco'] = trim($bM[1]);
-    if (preg_match($titConf['identificador'], $text, $idM)) $cliente['id'] = $idM[1];
-
+    if (preg_match($pdfConfig['titular']['identificador'], $text, $idM)) $cliente['id'] = $idM[1];
     foreach ($lineas as $i => $linea) {
-      if (preg_match($titConf['titular'], $linea, $titM)) {
+      if (preg_match($pdfConfig['titular']['titular'], $linea, $titM)) {
         $cliente['nombre'] = trim($titM[2]);
         $cliente['direccion'] = trim($lineas[$i + 1] ?? 'N/A');
-
-        // Búsqueda de CP y Ciudad en proximidad
-        for ($j = $i + 1; $j <= $i + 4; $j++) {
-          if (isset($lineas[$j])) {
-            if (preg_match($titConf['cp'], $lineas[$j], $cpM)) $cliente['cp'] = $cpM[1];
-            if (preg_match($titConf['ciudad'], $lineas[$j], $cityM)) $cliente['ciudad'] = trim($cityM[1]);
-          }
+        if (isset($lineas[$i + 2]) && preg_match($pdfConfig['titular']['cp'], $lineas[$i + 2], $cpM)) {
+          $cliente['cp'] = $cpM[1];
+          if (preg_match($pdfConfig['titular']['ciudad'], $lineas[$i + 2], $cityM)) $cliente['ciudad'] = trim($cityM[1]);
         }
         break;
       }
     }
     return $cliente;
-  }
-
-  private function procesarBloquesOperaciones($text, $pdfExtract, $delims) {
-    // Separamos el PDF en bloques basados en los nombres de las cuentas
-    $bloques = preg_split('/(Compte Courant Postal|Livret A)/i', $text, -1, PREG_SPLIT_DELIM_CAPTURE);
-
-    $contexto = '';
-    foreach ($bloques as $bloque) {
-      $clean = strtoupper(trim($bloque));
-      if (str_contains($clean, 'COMPTE COURANT POSTAL')) {
-        $contexto = 'cuenta1';
-        continue;
-      }
-      if (str_contains($clean, 'LIVRET A')) {
-        $contexto = 'cuenta2';
-        continue;
-      }
-
-      if ($contexto && isset($pdfExtract[$contexto])) {
-        $pdfExtract[$contexto]['operaciones'] = $this->extraerLineas($bloque, $delims);
-      }
-    }
-    return $pdfExtract;
-  }
-
-  private function extraerLineas($textoBloque, $delims) {
-    $lineas = explode("\n", $textoBloque);
-    $ops = [];
-    $temp = null;
-    $capturar = false;
-
-    foreach ($lineas as $l) {
-      $l = trim($l);
-      if (str_contains($l, $delims['inicio'])) {
-        $capturar = true;
-        continue;
-      }
-      if (str_contains($l, $delims['fin'])) {
-        $capturar = false;
-        break;
-      }
-
-      if ($capturar && strlen($l) > 5) {
-        if (preg_match('/^(\d{2}\/\d{2})\s+(.+)/', $l, $m)) {
-          if ($temp) $ops[] = $temp;
-          $temp = ['fecha' => $m[1], 'desc' => $m[2], 'monto' => 0, 'signo' => '+', 'frf' => 0];
-        } elseif ($temp && preg_match('/([\d\s]+,\d{2})\s+([+-])\s+([\d\s]+,\d{2})$/', $l, $mon)) {
-          $temp['monto'] = (float)str_replace([' ', ','], ['', '.'], $mon[1]);
-          $temp['signo'] = $mon[2];
-          $temp['frf'] = (float)str_replace([' ', ','], ['', '.'], $mon[3]);
-        } elseif ($temp) {
-          $temp['desc'] .= ' ' . $l;
-        }
-      }
-    }
-    if ($temp) $ops[] = $temp;
-    return $ops;
   }
 }
