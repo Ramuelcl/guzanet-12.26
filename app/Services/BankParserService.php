@@ -4,141 +4,155 @@
 namespace App\Services;
 
 class BankParserService {
-  public function parseBancas(string $text) {
-    $pdfConfig = config('banca.pdf');
-    $cuentasConf = $pdfConfig['cuentas'];
+  private array $lineas = [];
+  private array $configBanca = [];
 
-    $pdfExtract = [
-      'cliente' => $this->extraerDatosCliente($text, $pdfConfig)
+  public function __construct() {
+    // Cargamos la configuración una sola vez al instanciar
+    $this->configBanca = config('banca.pdf') ?? [];
+  }
+
+  /**
+   * Procesa el texto del PDF y devuelve los datos estructurados.
+   */
+  public function parseBancas(string $text): array {
+    $this->prepararLineas($text);
+
+    // Buscamos el nombre del banco dinámicamente
+    $nombreBanco = $this->identificarBanco($text);
+    // PROACTIVO: Para seguir con el parseo, necesitamos saber a qué bloque 
+    // de reglas pertenece este nombre encontrado.
+    $bancoKey = $this->obtenerKeyPorNombre($text);
+
+    $reglas = $this->configBanca[$bancoKey];
+    // PROACTIVO: Extraemos los detalles generales del banco (IBAN/BIC)
+    $ibanGeneral = $this->extraerCampo($text, $reglas['detalles']['iban']);
+    $bicGeneral = $this->extraerCampo($text, $reglas['detalles']['bic']);
+    $paso = [
+      'banco_nombre_real' => $nombreBanco, // El texto extraído (Ej: LA BANQUE POSTALE)
+      'banco_key' => $bancoKey,           // La llave interna (Ej: banco1)
+      'cliente' => [
+        'nombre' => $this->extraerCampo($text, $reglas['titular']['nombre']),
+        'id'     => $this->extraerCampo($text, $reglas['titular']['id_cliente']),
+      ],
+      // Pasamos el IBAN y BIC extraídos al procesador de cuentas
+      'cuentas' => $this->procesarCuentas($text, $reglas),
     ];
+    dd($paso);
+    return $paso;
+  }
 
-    // --- DETECCIÓN DINÁMICA DE CUENTAS ---
-    foreach ($cuentasConf as $key => $pattern) {
-      // Ignoramos llaves que no son identificadores de cuenta
-      if (in_array($key, ['iban', 'bic'])) continue;
-
-      // Usamos PREG_OFFSET_CAPTURE para verificar si el patrón existe en el texto
-      if (preg_match($pattern, $text, $match)) {
-
-        // Mapeamos el nombre descriptivo según la clave de tu config
-        $tipoNombre = match ($key) {
-          'cuenta1' => 'COMPTE COURANT POSTAL',
-          'cuenta2' => 'LIVRET A',
-          'cuenta3' => 'LIVRET B',
-          default   => 'AUTRE COMPTE'
-        };
-
-        // Agregamos la cuenta al array final
-        $pdfExtract[$key] = [
-          'detalle' => $this->mapearDetalleCuenta($tipoNombre, $match, $text, $cuentasConf),
-          'operaciones' => []
-        ];
+  /**
+   * Extrae el nombre del banco usando EXCLUSIVAMENTE los patrones de banca.php
+   */
+  private function identificarBanco(string $text): string {
+    foreach ($this->configBanca as $config) {
+      // Usamos el patrón definido en la config: '/Courrier\s*:\s*([A-Z0-9\s]{15,})/i'
+      if (isset($config['nombre_banco']) && preg_match($config['nombre_banco'], $text, $matches)) {
+        // Retornamos el contenido del primer paréntesis capturado
+        return trim($matches[1]);
       }
     }
 
-    // Si se detectaron cuentas, procesamos las operaciones
-    return $this->procesarBloquesOperaciones($text, $pdfExtract, $pdfConfig['delimitadores']);
+    throw new \Exception("No se pudo extraer el nombre del banco. El texto no coincide con ningún patrón de 'Courrier' en banca.php");
   }
 
-  private function mapearDetalleCuenta($nombreLargo, $matches, $text, $conf) {
-    // Buscamos IBAN y BIC globales
-    preg_match($conf['iban'], $text, $ibanM);
-    preg_match($conf['bic'], $text, $bicM);
-
-    // Limpieza de saldos: eliminamos espacios y convertimos coma en punto
-    $rawSaldo = str_replace(' ', '', $matches[2]);
-    $valSaldo = (float)str_replace(',', '.', $rawSaldo);
-
-    return [
-      'tipo' => $nombreLargo,
-      'numero' => str_replace(' ', '', $matches[1]),
-      'saldo' => $valSaldo,
-      'signo' => ($valSaldo >= 0) ? '+' : '-',
-      'iban' => $ibanM[1] ?? 'N/A',
-      'bic' => $bicM[1] ?? 'N/A'
-    ];
+  /**
+   * Auxiliar para saber qué reglas (banco1, banco2...) aplicar tras identificar el texto
+   */
+  private function obtenerKeyPorNombre(string $text): string {
+    foreach ($this->configBanca as $key => $config) {
+      if (preg_match($config['nombre_banco'], $text)) {
+        return $key;
+      }
+    }
+    throw new \Exception("No se encontró una llave de configuración para este banco.");
   }
 
-  private function extraerDatosCliente($text, $pdfConfig) {
-    $titConf = $pdfConfig['titular'];
-    $lineas = explode("\n", $text);
-    $cliente = ['id' => 'N/A', 'nombre' => 'N/A', 'direccion' => 'N/A', 'cp' => 'N/A', 'ciudad' => 'N/A', 'banco' => 'N/A'];
+  private function prepararLineas(string $text): void {
+    // PROACTIVO: Eliminamos espacios de no ruptura y normalizamos tabulaciones
+    $text = str_replace(["\t", "\r", "\xc2\xa0", "\xa0"], [" ", "", " ", " "], $text);
+    $this->lineas = array_values(array_filter(array_map('trim', explode("\n", $text))));
+  }
 
-    if (preg_match($pdfConfig['banca_nombre'], $text, $bM)) $cliente['banco'] = trim($bM[1]);
-    if (preg_match($titConf['identificador'], $text, $idM)) $cliente['id'] = $idM[1];
+  private function extraerCampo(string $text, string $regex): string {
+    if (preg_match($regex, $text, $matches)) {
+      return trim(end($matches));
+    }
+    return 'N/A';
+  }
 
-    foreach ($lineas as $i => $linea) {
-      if (preg_match($titConf['titular'], $linea, $titM)) {
-        $cliente['nombre'] = trim($titM[2]);
-        $cliente['direccion'] = trim($lineas[$i + 1] ?? 'N/A');
+  /**
+   * Busca cuentas y sus detalles específicos (IBAN/BIC) con validación de línea única.
+   */
+  private function procesarCuentas(string $fullText, array $reglas): array {
+    $cuentasEncontradas = [];
+    $cuentasConfig = $reglas['cuentas'];
 
-        // Búsqueda de CP y Ciudad en proximidad
-        for ($j = $i + 1; $j <= $i + 4; $j++) {
-          if (isset($lineas[$j])) {
-            if (preg_match($titConf['cp'], $lineas[$j], $cpM)) $cliente['cp'] = $cpM[1];
-            if (preg_match($titConf['ciudad'], $lineas[$j], $cityM)) $cliente['ciudad'] = trim($cityM[1]);
+    foreach ($cuentasConfig as $tipo => $conf) {
+      $regex = $conf['regex'];
+
+      foreach ($this->lineas as $index => $linea) {
+        $lineaLimpia = preg_replace('/[[:^print:]]/', ' ', $linea);
+
+        if (preg_match($regex, $lineaLimpia, $matches)) {
+          $numeroCuenta = trim($matches[1]);
+          $saldoTexto = trim($matches[2]);
+          $numeroCuentaLimpio = str_replace(' ', '', $numeroCuenta);
+
+          // 1. Buscamos la línea que contiene el IBAN de ESTA cuenta específica
+          $datosBancarios = $this->extraerLineaIbanYBic($numeroCuentaLimpio, $reglas['detalles']);
+
+          $cuentasEncontradas[] = [
+            'tipo_key' => $tipo,
+            'label'    => $conf['label'],
+            'detalle'  => [
+              'numero' => $numeroCuenta,
+              'saldo'  => $this->limpiarSaldo($saldoTexto),
+              'tipo'   => $conf['label'],
+              'iban'   => $datosBancarios['iban'],
+              'bic'    => $datosBancarios['bic'],
+            ]
+          ];
+          break;
+        }
+      }
+    }
+    return $cuentasEncontradas;
+  }
+
+  /**
+   * PROACTIVO: Localiza la línea del IBAN que corresponde a la cuenta y extrae el BIC de esa misma línea.
+   */
+  private function extraerLineaIbanYBic(string $numeroCuentaLimpio, array $reglasDetalles): array {
+    $resultado = ['iban' => 'N/A', 'bic' => 'N/A'];
+
+    foreach ($this->lineas as $linea) {
+      // Buscamos si la línea tiene un IBAN
+      if (preg_match($reglasDetalles['iban'], $linea, $matchesIban)) {
+        $ibanEncontrado = trim($matchesIban[1]);
+        $ibanLimpio = str_replace(' ', '', $ibanEncontrado);
+
+        // Verificamos si este IBAN pertenece a la cuenta actual
+        if (strpos($ibanLimpio, $numeroCuentaLimpio) !== false) {
+          $resultado['iban'] = $ibanEncontrado;
+
+          // PROACTIVO: Buscamos el BIC en ESTA MISMA línea para evitar duplicados de otras cuentas
+          if (preg_match($reglasDetalles['bic'], $linea, $matchesBic)) {
+            $resultado['bic'] = trim($matchesBic[1]);
           }
-        }
-        break;
-      }
-    }
-    return $cliente;
-  }
 
-  private function procesarBloquesOperaciones($text, $pdfExtract, $delims) {
-    // Separamos el PDF en bloques basados en los nombres de las cuentas
-    $bloques = preg_split('/(Compte Courant Postal|Livret A)/i', $text, -1, PREG_SPLIT_DELIM_CAPTURE);
-
-    $contexto = '';
-    foreach ($bloques as $bloque) {
-      $clean = strtoupper(trim($bloque));
-      if (str_contains($clean, 'COMPTE COURANT POSTAL')) {
-        $contexto = 'cuenta1';
-        continue;
-      }
-      if (str_contains($clean, 'LIVRET A')) {
-        $contexto = 'cuenta2';
-        continue;
-      }
-
-      if ($contexto && isset($pdfExtract[$contexto])) {
-        $pdfExtract[$contexto]['operaciones'] = $this->extraerLineas($bloque, $delims);
-      }
-    }
-    return $pdfExtract;
-  }
-
-  private function extraerLineas($textoBloque, $delims) {
-    $lineas = explode("\n", $textoBloque);
-    $ops = [];
-    $temp = null;
-    $capturar = false;
-
-    foreach ($lineas as $l) {
-      $l = trim($l);
-      if (str_contains($l, $delims['inicio'])) {
-        $capturar = true;
-        continue;
-      }
-      if (str_contains($l, $delims['fin'])) {
-        $capturar = false;
-        break;
-      }
-
-      if ($capturar && strlen($l) > 5) {
-        if (preg_match('/^(\d{2}\/\d{2})\s+(.+)/', $l, $m)) {
-          if ($temp) $ops[] = $temp;
-          $temp = ['fecha' => $m[1], 'desc' => $m[2], 'monto' => 0, 'signo' => '+', 'frf' => 0];
-        } elseif ($temp && preg_match('/([\d\s]+,\d{2})\s+([+-])\s+([\d\s]+,\d{2})$/', $l, $mon)) {
-          $temp['monto'] = (float)str_replace([' ', ','], ['', '.'], $mon[1]);
-          $temp['signo'] = $mon[2];
-          $temp['frf'] = (float)str_replace([' ', ','], ['', '.'], $mon[3]);
-        } elseif ($temp) {
-          $temp['desc'] .= ' ' . $l;
+          return $resultado; // Retornamos inmediatamente al encontrar la pareja correcta
         }
       }
     }
-    if ($temp) $ops[] = $temp;
-    return $ops;
+
+    return $resultado;
+  }
+
+  private function limpiarSaldo($valor) {
+    // Convierte "1 250,80" o "1.250,80" en 1250.80
+    $clean = str_replace([' ', '.'], '', $valor);
+    return (float) str_replace(',', '.', $clean);
   }
 }

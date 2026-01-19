@@ -3,26 +3,45 @@
 
 return [
   'pdf' => [
-    'banca_nombre' => '/Courrier\s*:\s*([A-Z\s\-]+)/i',
-    'titular' => [
-      'identificador' => '/Votre identifiant\s*:\s*(\d+)/i',
-      'titular'       => '/(MR|MME|M\.)\s+([A-Z\s\-]+)/i',
-      'direccion'     => '/\d{5}\s+[A-Z\s\-]+/', // Usado para separar el bloque de dirección
-      'cp'            => '/(\d{5})/',
-      'ciudad'        => '/\d{5}\s+([A-Z\s\-]+)/i',
-      'ccp_header'    => '/CCP n°\s*([\d\s\w]+?)\s+([\d\s]+,\d{2})/i',
-      'livret_header' => '/Livret A n°\s*([\d\s\w]+?)\s+([\d\s]+,\d{2})/i',
+    'banco1' => [
+      'nombre_banco' => '/Courrier\s*:\s*([A-Z0-9\s]{15,}?)(?:\r?\n|$)/i',
+      'titular' => [
+        'id_cliente' => '/identifiant\s*:\s*(\d+)/i',
+        'nombre'     => '/(MR|MME|M\.)\s+([A-Z\s\-]+)/i',
+      ],
+      'cuentas' => [
+        'cuenta1' => ['regex' => '/(?:CCP|Compte\s*Courant\s*Postal)\s*n[°º]?\s*([\d\s\w]+?)\s+([+-]?[\d\s\.]*,\d{2})/i', 'label' => 'CCP'],
+        'cuenta2' => ['regex' => '/(?:Livret\s*A)\s*n[°º]?\s*([\d\s\w]+?)\s+([+-]?[\d\s\.]*,\d{2})/i', 'label' => 'LIVRET A'],
+      ],
+      'detalles' => [
+        'iban' => '/IBAN\s*:\s*([A-Z0-9\s]{15,})/i',
+        'bic'  => '/BIC\s*:\s*([A-Z0-9]{8,11})/i',
+      ],
+      'delimitadores' => [
+        'inicio' => 'Ancien solde au',
+        'fin'    => 'Nouveau solde au',
+      ]
     ],
-    'cuentas' => [
-      'cuenta1'      => '/CCP n°\s*([\w\s]+?)\s+([\d\s]+,\d{2})/i',
-      'cuenta2' => '/Livret A n°\s*([\w\s]+?)\s+([\d\s]+,\d{2})/i',
-      'cuenta3' => '/Livret B n°\s*([\w\s]+?)\s+([\d\s]+,\d{2})/i',
-      'iban'     => '/IBAN\s*:\s*([A-Z0-9\s]+)/i',
-      'bic'      => '/BIC\s*:\s*([A-Z0-9]+)/i',
+    // 
+    'banco2' => [ // Ejemplo de segundo banco
+      'nombre_banco'  => '/Courrier\s*:\s*([A-Z0-9\s]{15,})/i',
+      'titular' => [
+        'id_cliente' => '/identifiant\s*:\s*(\d+)/i',
+        'nombre'     => '/(MR|MME|M\.)\s+([A-Z\s\-]+)/i',
+      ],
+      'cuentas' => [
+        'cuenta1' => ['regex' => '/(?:CCP|Compte\s*Courant\s*Postal)\s*n[°º]?\s*([\d\s\w]+?)\s+([+-]?[\d\s\.]*,\d{2})/i', 'label' => 'CCP'],
+        'cuenta2' => ['regex' => '/(?:Livret\s*A)\s*n[°º]?\s*([\d\s\w]+?)\s+([+-]?[\d\s\.]*,\d{2})/i', 'label' => 'LIVRET A'],
+      ],
+      'detalles' => [
+        'iban' => '/IBAN\s*:\s*([A-Z0-9\s]{15,})/i',
+        'bic'  => '/BIC\s*:\s*([A-Z0-9]{8,11})/i',
+      ],
+      'delimitadores' => [
+        'inicio' => 'Ancien solde au',
+        'fin'    => 'Nouveau solde au',
+      ]
     ],
-    'delimitadores' => [
-      'inicio' => 'Ancien solde au',
-      'fin'    => 'Nouveau solde au',
-    ]
+
   ]
 ];
