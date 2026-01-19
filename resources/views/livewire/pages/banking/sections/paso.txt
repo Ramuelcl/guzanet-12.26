@@ -1,0 +1,27 @@
+ahora si funciona: 
+array:3 [▼ // resources\views\livewire\pages\banking\sections\import-pdf.blade.php:26
+  "cliente" => array:6 [▶]
+  "cuenta1" => array:2 [▼
+    "detalle" => array:6 [▼
+      "tipo" => "N/A"
+      "numero" => "5578733W020"
+      "saldo" => 1351.8
+      "signo" => "+"
+      "iban" => "FR1920041000015578733W02031"
+      "bic" => "PSSTFRPPPAR"
+    ]
+    "operaciones" => []
+  ]
+  "cuenta2" => array:2 [▼
+    "detalle" => array:6 [▼
+      "tipo" => "N/A"
+      "numero" => "1204101354V"
+      "saldo" => 2493.26
+      "signo" => "+"
+      "iban" => "FR0410011000201204101354V76"
+      "bic" => "PSSTFRPPCNE"
+    ]
+    "operaciones" => []
+  ]
+]
+entonces hay que leer las operaciones. para mi cada operación empieza en una fecha dd/mm y termina en la siguiente línea con dd/mm o "Nouveau solde au" si hay lineas excedentes corresponden a la descripción del movimiento. que sugieres?
