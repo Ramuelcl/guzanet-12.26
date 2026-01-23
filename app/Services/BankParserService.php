@@ -3,6 +3,8 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Log;
+
 class BankParserService {
   private array $lineas = [];
   private array $configBanca = [];
@@ -25,9 +27,7 @@ class BankParserService {
     $bancoKey = $this->obtenerKeyPorNombre($text);
 
     $reglas = $this->configBanca[$bancoKey];
-    // PROACTIVO: Extraemos los detalles generales del banco (IBAN/BIC)
-    $ibanGeneral = $this->extraerCampo($text, $reglas['detalles']['iban']);
-    $bicGeneral = $this->extraerCampo($text, $reglas['detalles']['bic']);
+
     $paso = [
       'banco_nombre_real' => $nombreBanco, // El texto extraído (Ej: LA BANQUE POSTALE)
       'banco_key' => $bancoKey,           // La llave interna (Ej: banco1)
@@ -35,10 +35,9 @@ class BankParserService {
         'nombre' => $this->extraerCampo($text, $reglas['titular']['nombre']),
         'id'     => $this->extraerCampo($text, $reglas['titular']['id_cliente']),
       ],
-      // Pasamos el IBAN y BIC extraídos al procesador de cuentas
       'cuentas' => $this->procesarCuentas($text, $reglas),
     ];
-    dd($paso);
+    Log::info('Resultado del parsing completo: ' . json_encode($paso));
     return $paso;
   }
 
@@ -70,6 +69,8 @@ class BankParserService {
   }
 
   private function prepararLineas(string $text): void {
+    // Asegurar que el texto esté en UTF-8
+    $text = iconv('ISO-8859-1', 'UTF-8//TRANSLIT', $text);
     // PROACTIVO: Eliminamos espacios de no ruptura y normalizamos tabulaciones
     $text = str_replace(["\t", "\r", "\xc2\xa0", "\xa0"], [" ", "", " ", " "], $text);
     $this->lineas = array_values(array_filter(array_map('trim', explode("\n", $text))));
@@ -102,7 +103,6 @@ class BankParserService {
 
           // 1. Buscamos la línea que contiene el IBAN de ESTA cuenta específica
           $datosBancarios = $this->extraerLineaIbanYBic($numeroCuentaLimpio, $reglas['detalles']);
-
           $cuentasEncontradas[] = [
             'tipo_key' => $tipo,
             'label'    => $conf['label'],
@@ -112,13 +112,140 @@ class BankParserService {
               'tipo'   => $conf['label'],
               'iban'   => $datosBancarios['iban'],
               'bic'    => $datosBancarios['bic'],
-            ]
+            ],
+            'operaciones' => $this->extraerOperaciones($index, $this->lineas, $tipo)
           ];
           break;
         }
       }
     }
     return $cuentasEncontradas;
+  }
+
+  public function extraerOperaciones(int $index, array $lineas, string $tipo): array {
+    // Log::info("Extrayendo operaciones desde línea {$index} con reglas movimientos: " . json_encode($reglasMov));
+    $operaciones = [];
+    $inicioEncontrado = false;
+    $descripcionAcumulada = '';
+    $fechaActual = null;
+    $anoBase = $this->extraerAnoBase($index);
+    $indiceOperacion = 0; // Contador para el índice de la operación
+    $reglasMov = $this->configBanca[$tipo]['movimientos']; // Asumiendo bancoN
+    $delimitadores = $reglasMov['delimitadores'];
+
+    for ($i = $index + 1; $i < count($lineas); $i++) {
+      $lineaActual = trim($this->lineas[$i]);
+
+      if (!$inicioEncontrado && strpos($lineaActual, $delimitadores['inicio']) !== false) {
+        Log::info("Inicio encontrado: '{$lineaActual}'");
+        $inicioEncontrado = true;
+        continue;
+      }
+
+      if ($inicioEncontrado) {
+        if (strpos($lineaActual, $delimitadores['fin']) !== false) {
+          Log::info("Fin encontrado: '{$lineaActual}'");
+          // Procesar la última operación acumulada si existe
+          if ($fechaActual) {
+            Log::info("Descripción final: '{$descripcionAcumulada}'");
+            $operacion = $this->parsearOperacion($fechaActual, $descripcionAcumulada, $anoBase, $indiceOperacion);
+            $operaciones[] = $operacion;
+            Log::info("Operación final parseada: " . json_encode($operacion));
+            $indiceOperacion++;
+          }
+          break;
+        }
+
+        // Verificar si la línea contiene una fecha (DD/MM o DD/MM/YYYY)
+        if (preg_match('/^(\d{2}\/\d{2}(?:\/\d{4})?)/', $lineaActual, $matchesFecha)) {
+          // Si ya hay una fecha anterior, procesar la operación acumulada
+          if ($fechaActual) {
+            Log::info("Descripción final: '{$descripcionAcumulada}'");
+            $operacion = $this->parsearOperacion($fechaActual, $descripcionAcumulada, $anoBase, $indiceOperacion);
+            $operaciones[] = $operacion;
+            Log::info("Operación parseada: " . json_encode($operacion));
+            $indiceOperacion++;
+          }
+          // Iniciar nueva operación
+          $fechaActual = $matchesFecha[1];
+          $descripcionAcumulada = $lineaActual;
+        } else {
+          // Concatenar a la descripción acumulada (para descripciones multilínea)
+          $descripcionAcumulada .= ' ' . $lineaActual;
+        }
+      }
+    }
+
+    Log::info('Operaciones extraídas total: ' . count($operaciones));
+    return $operaciones;
+  }
+
+  private function extraerAnoBase(int $lineaCuentaIndex): int {
+    // Buscar la línea "Ancien solde au DD/MM/YYYY" para extraer el año base
+    for ($i = $lineaCuentaIndex; $i < count($this->lineas); $i++) {
+      $linea = $this->lineas[$i];
+      if (preg_match('/Ancien solde au (\d{2}\/\d{2}\/(\d{4}))/', $linea, $matches)) {
+        return (int) $matches[2];
+      }
+    }
+    // Si no encuentra, usar el año actual
+    return date('Y');
+  }
+
+  private function parsearOperacion(string $fecha, string $descripcionCompleta, int $anoBase, int $indiceOperacion = 0): array {
+    Log::info("Parseando operación #{$indiceOperacion} - Descripción: '{$descripcionCompleta}'");
+    // Limpiar la descripción
+    $descripcionCompleta = trim($descripcionCompleta);
+
+    // Obtener reglas de movimientos para usar regex_fila
+    $reglasMov = $this->configBanca['banco1']['movimientos']; // Asumiendo banco1, ajustar si hay múltiples bancos
+    $pattern = $reglasMov['regex_fila'];
+
+    if (preg_match($pattern, $descripcionCompleta, $matches)) {
+      $fechaExtraida = $matches[1];
+      $concepto = trim($matches[2]);
+      $debito = $this->limpiarSaldo($matches[3]);
+      $credito = isset($matches[4]) ? $this->limpiarSaldo($matches[4]) : 0.0;
+      $soldeFrancs = $this->limpiarSaldo($matches[5]);
+
+      $resultado = [
+        'Date' => $this->normalizarFecha($fechaExtraida, $anoBase),
+        'Opérations' => $concepto,
+        'Débit' => $debito,
+        'Crédit' => $credito,
+        'francs' => $soldeFrancs,
+      ];
+      Log::info("Operación #{$indiceOperacion} parseada exitosamente: " . json_encode($resultado));
+      return $resultado;
+    } else {
+      // Si no coincide el patrón, devolver con valores por defecto
+      $resultado = [
+        'Date' => $this->normalizarFecha($fecha, $anoBase),
+        'Opérations' => $descripcionCompleta,
+        'Débit' => 0.0,
+        'Crédit' => 0.0,
+        'francs' => 0.0,
+      ];
+      Log::info("Operación #{$indiceOperacion} no parseada (patrón no coincide): " . json_encode($resultado));
+      return $resultado;
+    }
+  }
+
+  private function normalizarFecha(string $fecha, int $anoBase): string {
+    // Si la fecha es DD/MM, agregar el año base o ajustado
+    if (preg_match('/^(\d{2})\/(\d{2})$/', $fecha, $matches)) {
+      $dia = (int) $matches[1];
+      $mes = (int) $matches[2];
+      $ano = $anoBase;
+
+      // Si la fecha supera 31/12 del año base, sumar 1 al año
+      if ($mes > 12 || ($mes == 12 && $dia > 31)) {
+        $ano = $anoBase + 1;
+      }
+
+      return sprintf('%02d/%02d/%04d', $dia, $mes, $ano);
+    }
+    return $fecha;
   }
 
   /**

@@ -17,9 +17,34 @@ return [
         'iban' => '/IBAN\s*:\s*([A-Z0-9\s]{15,})/i',
         'bic'  => '/BIC\s*:\s*([A-Z0-9]{8,11})/i',
       ],
-      'delimitadores' => [
-        'inicio' => 'Ancien solde au',
-        'fin'    => 'Nouveau solde au',
+      'movimientos' => [
+        'delimitadores' => [
+          'inicio' => 'Ancien solde au',
+          'fin'    => 'Nouveau solde au',
+        ],
+        'regex_fila' => '/(\d{2}\/\d{2}(?:\/\d{4})?)\s+(.+?)\s+(\d+(?:[.,]\d{2})?)(?:\s+(\d+(?:[.,]\d{2})?))?\s+([+-]?\d+(?:[.,]\d{2})?)$/',
+        'columnas' => [
+          'Date' => [
+            'descripcion' => 'Fecha de la operación en formato DD/MM o DD/MM/YYYY',
+            'regex' => '/(\d{2}\/\d{2}(?:\/\d{4})?)/'
+          ],
+          'Opérations' => [
+            'descripcion' => 'Descripción de la operación',
+            'regex' => '/\d{2}\/\d{2}(?:\/\d{4})?\s+(.+?)\s+\d+(?:[.,]\d{2})?/'
+          ],
+          'francs' => [
+            'descripcion' => 'Saldo en francos con signo',
+            'regex' => '/[+-]?\d+(?:[.,]\d{2})?$/'
+          ],
+          'Débit' => [
+            'descripcion' => 'Monto debitado',
+            'regex' => '/\d+(?:[.,]\d{2})?/'
+          ],
+          'Crédit' => [
+            'descripcion' => 'Monto acreditado (opcional)',
+            'regex' => '/(?:\d+(?:[.,]\d{2})?)?/'
+          ],
+        ]
       ]
     ],
     // 
@@ -37,9 +62,34 @@ return [
         'iban' => '/IBAN\s*:\s*([A-Z0-9\s]{15,})/i',
         'bic'  => '/BIC\s*:\s*([A-Z0-9]{8,11})/i',
       ],
-      'delimitadores' => [
-        'inicio' => 'Ancien solde au',
-        'fin'    => 'Nouveau solde au',
+      'movimientos' => [
+        'delimitadores' => [
+          'inicio' => 'Ancien solde au',
+          'fin'    => 'Nouveau solde au',
+        ],
+        'regex_fila' => '/(\d{2}\/\d{2}(?:\/\d{4})?)\s+(.+?)\s+(\d+(?:[.,]\d{2})?)(?:\s+(\d+(?:[.,]\d{2})?))?\s+([+-]?\d+(?:[.,]\d{2})?)$/',
+        'columnas' => [
+          'fecha' => [
+            'descripcion' => 'Fecha de la operación en formato DD/MM o DD/MM/YYYY',
+            'regex' => '/(\d{2}\/\d{2}(?:\/\d{4})?)/'
+          ],
+          'operaciones' => [
+            'descripcion' => 'Descripción de la operación',
+            'regex' => '/\d{2}\/\d{2}(?:\/\d{4})?\s+(.+?)\s+\d+(?:[.,]\d{2})?/'
+          ],
+          'debito' => [
+            'descripcion' => 'Monto debitado',
+            'regex' => '/\d+(?:[.,]\d{2})?/'
+          ],
+          'credito' => [
+            'descripcion' => 'Monto acreditado (opcional)',
+            'regex' => '/(?:\d+(?:[.,]\d{2})?)?/'
+          ],
+          'francs' => [
+            'descripcion' => 'Saldo en francos con signo',
+            'regex' => '/[+-]?\d+(?:[.,]\d{2})?$/'
+          ]
+        ]
       ]
     ],
 

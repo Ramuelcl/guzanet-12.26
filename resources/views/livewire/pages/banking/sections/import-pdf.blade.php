@@ -87,7 +87,25 @@ $processPdf = function (BankParserService $parserService) {
             $this->fileQueue[$index]['progress'] = 90;
             
             // Lógica de base de datos...
-            //
+            foreach ($extract['cuentas'] as $cuentaData) {
+                $cuenta = Cuenta::create([
+                    'numero' => $cuentaData['detalle']['numero'],
+                    'saldo' => $cuentaData['detalle']['saldo'],
+                    'tipo' => $cuentaData['detalle']['tipo'],
+                    'iban' => $cuentaData['detalle']['iban'],
+                    'bic' => $cuentaData['detalle']['bic'],
+                ]);
+                
+                foreach ($cuentaData['operaciones'] as $operacionData) {
+                    Operacion::create([
+                        'cuenta_id' => $cuenta->id,
+                        'fecha' => $operacionData['Date'],
+                        'concepto' => $operacionData['Opérations'],
+                        'importe' => $operacionData['Débit'] > 0 ? $operacionData['Débit'] : $operacionData['Crédit'],
+                        'tipo' => $operacionData['Débit'] > 0 ? 'debito' : 'credito',
+                    ]);
+                }
+            }
 
             $this->fileQueue[$index]['status'] = 'success';
             $this->fileQueue[$index]['progress'] = 100;
@@ -110,7 +128,7 @@ $processPdf = function (BankParserService $parserService) {
 <div class="bg-white dark:bg-gray-900 p-2 border border-gray-100 shadow-sm min-h-[400px]">
     
     {{-- MONITOR DE ESTADO --}}
-    <div class="mb-8 flex justify-between items-end">
+    <div class="mb-8 flex justify-between items-start">
         <div>
             <span class="text-[10px] font-black uppercase text-indigo-600 italic tracking-[0.2em]">Sincronizador Bancario</span>
             <div class="mt-2 p-3 bg-gray-50 border border-dashed border-gray-200 min-w-[400px]">
@@ -118,16 +136,40 @@ $processPdf = function (BankParserService $parserService) {
             </div>
         </div>
         
-        @if(count($fileQueue) > 0)
-            <button wire:click="clearQueue" class="text-[9px] font-black text-red-500 hover:underline uppercase mb-1">
-                Limpiar todo
+        <div class="flex flex-col gap-2">
+            {{-- BOTÓN DE ACCIÓN --}}
+            @php
+                $canProcess = collect($fileQueue)->where('status', '!=', 'success')->count() > 0;
+            @endphp
+            
+            <button wire:click="processPdf" 
+                    wire:loading.attr="disabled"
+                    @if(!$canProcess || $isProcessing) disabled @endif
+                    class="px-4 py-2 text-[9px] font-black uppercase tracking-[0.2em] transition-all
+                    {{ $canProcess && !$isProcessing ? 'bg-black text-white hover:bg-indigo-700 shadow-md' : 'bg-gray-100 text-gray-400 cursor-not-allowed' }}">
+                
+                <div class="flex items-center justify-center gap-2">
+                    <svg wire:loading wire:target="processPdf" class="animate-spin h-3 w-3 text-white" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>
+                        {{ $isProcessing ? 'Procesando...' : ($canProcess ? 'Procesar' : 'Sin archivos') }}
+                    </span>
+                </div>
             </button>
-        @endif
+
+            @if(count($fileQueue) > 0)
+                <button wire:click="clearQueue" class="text-[9px] font-black text-red-500 hover:underline uppercase">
+                    Limpiar todo
+                </button>
+            @endif
+        </div>
     </div>
 
     {{-- INPUT INTEGRADO (SIN COMPONENTES HIJOS) --}}
     <div class="w-full mb-8">
-        <div class="relative group border-2 border-dashed border-indigo-200 p-12 text-center bg-indigo-50/20 hover:bg-indigo-50/50 transition-all cursor-pointer">
+        <div class="relative group border-2 border-dashed border-indigo-200 p-6 text-center bg-indigo-50/20 hover:bg-indigo-50/50 transition-all cursor-pointer">
             
             {{-- Importante: multiple y wire:model deben estar aquí --}}
             <input type="file" 
