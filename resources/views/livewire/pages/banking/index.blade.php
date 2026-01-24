@@ -1,5 +1,7 @@
-{{-- resources/views/livewire/pages/banking/index.blade.php --}}
 <?php
+// resources/views/livewire/pages/banking/index.blade.php
+phpinfo();
+dd("stop");
 use function Livewire\Volt\{state, layout};
 layout('layouts.app');
 

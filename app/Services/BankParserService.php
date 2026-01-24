@@ -35,7 +35,7 @@ class BankParserService {
         'nombre' => $this->extraerCampo($text, $reglas['titular']['nombre']),
         'id'     => $this->extraerCampo($text, $reglas['titular']['id_cliente']),
       ],
-      'cuentas' => $this->procesarCuentas($text, $reglas),
+      'cuentas' => $this->procesarCuentas($reglas),
     ];
     Log::info('Resultado del parsing completo: ' . json_encode($paso));
     return $paso;
@@ -86,7 +86,7 @@ class BankParserService {
   /**
    * Busca cuentas y sus detalles específicos (IBAN/BIC) con validación de línea única.
    */
-  private function procesarCuentas(string $fullText, array $reglas): array {
+  private function procesarCuentas(array $reglas): array {
     $cuentasEncontradas = [];
     $cuentasConfig = $reglas['cuentas'];
 
@@ -106,6 +106,7 @@ class BankParserService {
           $cuentasEncontradas[] = [
             'tipo_key' => $tipo,
             'label'    => $conf['label'],
+            'index'    => $index, // Guardar el índice para calcular rangos
             'detalle'  => [
               'numero' => $numeroCuenta,
               'saldo'  => $this->limpiarSaldo($saldoTexto),
@@ -113,67 +114,56 @@ class BankParserService {
               'iban'   => $datosBancarios['iban'],
               'bic'    => $datosBancarios['bic'],
             ],
-            'operaciones' => $this->extraerOperaciones($index, $this->lineas, $tipo)
+            'operaciones' => [] // Se asignarán después de calcular rangos
           ];
           break;
         }
       }
     }
+
+    // Ordenar cuentas por índice y asignar rangos de operaciones
+    usort($cuentasEncontradas, fn($a, $b) => $a['index'] <=> $b['index']);
+    for ($i = 0; $i < count($cuentasEncontradas); $i++) {
+      $startIndex = $cuentasEncontradas[$i]['index'] + 1;
+      $endIndex = ($i + 1 < count($cuentasEncontradas)) ? $cuentasEncontradas[$i + 1]['index'] - 1 : count($this->lineas) - 1;
+      $cuentasEncontradas[$i]['operaciones'] = $this->extraerOperaciones($startIndex, $endIndex);
+      unset($cuentasEncontradas[$i]['index']); // Remover índice auxiliar
+    }
+
     return $cuentasEncontradas;
   }
 
-  public function extraerOperaciones(int $index, array $lineas, string $tipo): array {
-    // Log::info("Extrayendo operaciones desde línea {$index} con reglas movimientos: " . json_encode($reglasMov));
+  public function extraerOperaciones(int $startIndex, int $endIndex): array {
     $operaciones = [];
-    $inicioEncontrado = false;
     $descripcionAcumulada = '';
     $fechaActual = null;
-    $anoBase = $this->extraerAnoBase($index);
-    $indiceOperacion = 0; // Contador para el índice de la operación
-    $reglasMov = $this->configBanca[$tipo]['movimientos']; // Asumiendo bancoN
-    $delimitadores = $reglasMov['delimitadores'];
+    $anoBase = $this->extraerAnoBase($startIndex);
+    $indiceOperacion = 0;
 
-    for ($i = $index + 1; $i < count($lineas); $i++) {
-      $lineaActual = trim($this->lineas[$i]);
+    for ($i = $startIndex; $i <= $endIndex; $i++) {
+      $linea = trim($this->lineas[$i]);
 
-      if (!$inicioEncontrado && strpos($lineaActual, $delimitadores['inicio']) !== false) {
-        Log::info("Inicio encontrado: '{$lineaActual}'");
-        $inicioEncontrado = true;
-        continue;
-      }
-
-      if ($inicioEncontrado) {
-        if (strpos($lineaActual, $delimitadores['fin']) !== false) {
-          Log::info("Fin encontrado: '{$lineaActual}'");
-          // Procesar la última operación acumulada si existe
-          if ($fechaActual) {
-            Log::info("Descripción final: '{$descripcionAcumulada}'");
-            $operacion = $this->parsearOperacion($fechaActual, $descripcionAcumulada, $anoBase, $indiceOperacion);
-            $operaciones[] = $operacion;
-            Log::info("Operación final parseada: " . json_encode($operacion));
-            $indiceOperacion++;
-          }
-          break;
+      // Verificar si la línea contiene una fecha (DD/MM o DD/MM/YYYY)
+      if (preg_match('/^(\d{2}\/\d{2}(?:\/\d{4})?)/', $linea, $matchesFecha)) {
+        // Si ya hay una fecha anterior, procesar la operación acumulada
+        if ($fechaActual) {
+          $operacion = $this->parsearOperacion($fechaActual, $descripcionAcumulada, $anoBase, $indiceOperacion);
+          $operaciones[] = $operacion;
+          $indiceOperacion++;
         }
-
-        // Verificar si la línea contiene una fecha (DD/MM o DD/MM/YYYY)
-        if (preg_match('/^(\d{2}\/\d{2}(?:\/\d{4})?)/', $lineaActual, $matchesFecha)) {
-          // Si ya hay una fecha anterior, procesar la operación acumulada
-          if ($fechaActual) {
-            Log::info("Descripción final: '{$descripcionAcumulada}'");
-            $operacion = $this->parsearOperacion($fechaActual, $descripcionAcumulada, $anoBase, $indiceOperacion);
-            $operaciones[] = $operacion;
-            Log::info("Operación parseada: " . json_encode($operacion));
-            $indiceOperacion++;
-          }
-          // Iniciar nueva operación
-          $fechaActual = $matchesFecha[1];
-          $descripcionAcumulada = $lineaActual;
-        } else {
-          // Concatenar a la descripción acumulada (para descripciones multilínea)
-          $descripcionAcumulada .= ' ' . $lineaActual;
-        }
+        // Iniciar nueva operación
+        $fechaActual = $matchesFecha[1];
+        $descripcionAcumulada = trim(str_replace($matchesFecha[0], '', $linea));
+      } else {
+        // Concatenar a la descripción acumulada (para descripciones multilínea)
+        $descripcionAcumulada .= ' ' . $linea;
       }
+    }
+
+    // Procesar la última operación si existe
+    if ($fechaActual) {
+      $operacion = $this->parsearOperacion($fechaActual, $descripcionAcumulada, $anoBase, $indiceOperacion);
+      $operaciones[] = $operacion;
     }
 
     Log::info('Operaciones extraídas total: ' . count($operaciones));
@@ -198,7 +188,7 @@ class BankParserService {
     $descripcionCompleta = trim($descripcionCompleta);
 
     // Obtener reglas de movimientos para usar regex_fila
-    $reglasMov = $this->configBanca['banco1']['movimientos']; // Asumiendo banco1, ajustar si hay múltiples bancos
+    $reglasMov = $this->configBanca['banco1']['movimientos']; // Asumiendo banco1
     $pattern = $reglasMov['regex_fila'];
 
     if (preg_match($pattern, $descripcionCompleta, $matches)) {
@@ -207,6 +197,10 @@ class BankParserService {
       $debito = $this->limpiarSaldo($matches[3]);
       $credito = isset($matches[4]) ? $this->limpiarSaldo($matches[4]) : 0.0;
       $soldeFrancs = $this->limpiarSaldo($matches[5]);
+
+      // Determinar tipo basado en el signo de Solde en Francs
+      $tipo = ($soldeFrancs < 0) ? 'debito' : 'credito';
+      $importe = abs($soldeFrancs);
 
       $resultado = [
         'Date' => $this->normalizarFecha($fechaExtraida, $anoBase),
@@ -268,12 +262,15 @@ class BankParserService {
           if (preg_match($reglasDetalles['bic'], $linea, $matchesBic)) {
             $resultado['bic'] = trim($matchesBic[1]);
           }
-
-          return $resultado; // Retornamos inmediatamente al encontrar la pareja correcta
+          // INTENTO B: Fallback en fragmento (bloque de 25 líneas)
+          else {
+            $fragmento = implode("\n", array_slice($this->lineas, $indexLineaActual, 25));
+            $resultado['bic'] = $this->extraerCampo($fragmento, $reglasDetalles['bic']);
+          }
+          return $resultado;
         }
       }
     }
-
     return $resultado;
   }
 
