@@ -1,13 +1,13 @@
 <?php
-// C:\laragon\www\laravel\guzanet-12.26\app\Models\banca\Operacion.php
+// C:\laragon\www\laravel\guzanet-12.26\app\Models\banca\CuentaOperaciones.php
 
 namespace App\Models\banca;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Operacion extends Model {
-    protected $table = 'operaciones';
+class CuentaOperaciones extends Model {
+    protected $table = 'cuenta_operaciones';
 
     protected $fillable = [
         'cuenta_id',
