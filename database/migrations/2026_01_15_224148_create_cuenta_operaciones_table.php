@@ -17,10 +17,12 @@ return new class extends Migration {
             $table->decimal('credito', 15, 2)->default(0);
             $table->decimal('valor_francos', 15, 2)->nullable();
             $table->string('hash_operacion')->unique();
+            $table->string('releve_numero', 2)->nullable()->index();
             $table->timestamps();
 
             $table->index(['cuenta_id', 'fecha_operacion']);
             $table->index('hash_operacion');
+            $table->index('releve_numero'); // Índice para búsquedas por número de relevé
         });
     }
 

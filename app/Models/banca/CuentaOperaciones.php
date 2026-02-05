@@ -15,14 +15,13 @@ class CuentaOperaciones extends Model {
         'descripcion_operacion',
         'debito',
         'credito',
-        'hash_operacion',
         'valor_francos',
+        'hash_operacion',
+        'releve_numero', // <-- NUEVO CAMPO
     ];
 
     /**
      * Casting de atributos.
-     * Al usar 'date:Ymd', Laravel formatea automáticamente la fecha 
-     * como AAAAMMDD al serializar (JSON) y permite usar Carbon.
      */
     protected $casts = [
         'fecha_operacion' => 'date',
@@ -31,13 +30,6 @@ class CuentaOperaciones extends Model {
         'valor_francos' => 'decimal:2',
     ];
 
-    // // Obligamos a que la fecha siempre se maneje como un string AAAAMMDD al guardar
-    // protected function fechaOperacion(): Attribute {
-    //     return Attribute::make(
-    //         set: fn(string $value) => str_replace('-', '', $value), // De 2026-01-15 a 20260115
-    //         get: fn(string $value) => $value, // Se recupera como 20260115
-    //     );
-    // }
     /**
      * Obtener la cuenta a la que pertenece la operación.
      */

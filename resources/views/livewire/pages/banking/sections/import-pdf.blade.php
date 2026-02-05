@@ -95,23 +95,23 @@ $generarHashOperacion = function (array $operacionData, int $cuentaId): string {
 
 // Función para convertir fecha
 // Función para convertir fecha
-$convertirFecha = function(string $fechaStr, int $anioDocumento = 2000): string {
+$convertirFecha = function (string $fechaStr, int $anioDocumento = 2000): string {
     // Limpiar y normalizar la fecha
     $fechaStr = trim($fechaStr);
-    
+
     // Si ya está en formato MySQL, devolver tal cual
     if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaStr)) {
         return $fechaStr;
     }
-    
+
     // Intentar convertir diferentes formatos
     $formatos = [
-        'd/m/Y',    // 13/01/2018
-        'j/n/Y',    // 13/1/2018
-        'd/m',      // 13/01 (sin año)
-        'j/n',      // 13/1 (sin año)
+        'd/m/Y', // 13/01/2018
+        'j/n/Y', // 13/1/2018
+        'd/m', // 13/01 (sin año)
+        'j/n', // 13/1 (sin año)
     ];
-    
+
     foreach ($formatos as $formato) {
         $date = DateTime::createFromFormat($formato, $fechaStr);
         if ($date !== false) {
@@ -122,13 +122,13 @@ $convertirFecha = function(string $fechaStr, int $anioDocumento = 2000): string 
             return $date->format('Y-m-d');
         }
     }
-    
+
     // Si todo falla, intentar con strtotime
     $timestamp = strtotime(str_replace('/', '-', $fechaStr));
     if ($timestamp !== false) {
         return date('Y-m-d', $timestamp);
     }
-    
+
     // Fecha por defecto si no se puede parsear
     Log::warning("No se pudo parsear la fecha: $fechaStr, usando fecha por defecto");
     return date('Y-m-d');
@@ -334,6 +334,7 @@ $processPdf = function (BankParserService $parserService) {
                             'credito' => $operacionData['Crédit'] ?? 0,
                             'valor_francos' => $operacionData['francs'] ?? 0,
                             'hash_operacion' => $hash,
+                            'releve_numero' => $operacionData['releve_numero'] ?? ($extract['releve_numero'] ?? null), //
                         ],
                     );
 
