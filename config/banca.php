@@ -47,9 +47,15 @@ return [
       ],
 
       'operaciones' => [
-        'inicio' => '/Ancien solde au([A-Z0-9\s]{15,})/i',
-        'fin'    => '/Nouveau solde au([A-Z0-9\s]{15,})/i',
-        'regex_fila' => '/^(\d{2}\/\d{2})\s+(.*?)\s+([+-]?[\d\s\.]*,\d{2})$/m',
+        'inicio' => '/Ancien solde au\s+[\d\/\.\s,]+/i',  // Fechas y montos
+        'fin'    => '/Nouveau solde au\s+[\d\/\.\s,]+/i', // Fechas y montos
+        'regex_lineas' => [
+          // PATRÓN 0: Fecha(2 cifras/2 cifras) + Detalle + Monto(con coma y signo opcional)
+          // El \s* después de la fecha permite que estén pegados o separados.
+          0 => '/^(\d{2}\/\d{2})\s*(.*?)\s+([+-]?[\d\s\.]*,\d{2})$/i',
+          // PATRÓN 1: Todo lo que no tenga fecha pero sea texto (detalles extra)
+          1 => '/^([^0-9].*)$/i',
+        ],
       ],
 
     ]
